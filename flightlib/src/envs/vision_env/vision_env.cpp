@@ -343,10 +343,10 @@ bool VisionEnv::isTerminalState(Scalar &reward) {
   // world boundling box check
   // - x, y, and z
   const Scalar safty_threshold = 0.1;
-  bool x_valid = quad_state_.p(QS::POSX) >= world_box_[0] + safty_threshold &&
-                 quad_state_.p(QS::POSX) <= world_box_[1] - safty_threshold;
-  bool y_valid = quad_state_.p(QS::POSY) >= world_box_[2] + safty_threshold &&
-                 quad_state_.p(QS::POSY) <= world_box_[3] - safty_threshold;
+  bool x_valid = quad_state_.x(QS::POSX) >= world_box_[0] + safty_threshold &&
+                 quad_state_.x(QS::POSX) <= world_box_[1] - safty_threshold;
+  bool y_valid = quad_state_.x(QS::POSY) >= world_box_[2] + safty_threshold &&
+                 quad_state_.x(QS::POSY) <= world_box_[3] - safty_threshold;
   bool z_valid = quad_state_.x(QS::POSZ) >= world_box_[4] + safty_threshold &&
                  quad_state_.x(QS::POSZ) <= world_box_[5] - safty_threshold;
   if (!x_valid || !y_valid || !z_valid) {
