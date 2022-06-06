@@ -16,17 +16,17 @@ VisionEnv::VisionEnv(const std::string &cfg_path, const int env_id)
   }
   // load configuration file
   cfg_ = YAML::LoadFile(cfg_path);
+  env_id_ = env_id;
   //
   init();
-  env_id_ = env_id;
 }
 
 VisionEnv::VisionEnv(const YAML::Node &cfg_node, const int env_id) : EnvBase() {
   cfg_ = cfg_node;
+  env_id_ = env_id;
 
   //
   init();
-  env_id_ = env_id;
 }
 
 void VisionEnv::init() {
@@ -62,7 +62,8 @@ void VisionEnv::init() {
 
   obstacle_cfg_path_ = getenv("FLIGHTMARE_PATH") +
                        std::string("/flightpy/configs/vision/") +
-                       difficulty_level_ + std::string("/") + env_folder_;
+                       difficulty_level_ + std::string("/") +
+                       std::string("environment_") + std::to_string(env_id_);
 
   // add dynamic objects
   std::string dynamic_object_yaml =
