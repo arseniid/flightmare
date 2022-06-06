@@ -105,6 +105,7 @@ class VisionEnv final : public EnvBase {
   }
 
   std::unordered_map<std::string, float> extra_info_;
+  //std::string obstacle_cfg_path_;
 
  private:
   bool computeReward(Ref<Vector<>> reward);
