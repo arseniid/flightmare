@@ -1,5 +1,5 @@
 environment:
-  level: "medium" # three difficulty level [easy, medium, hard]
+  level: ["easy", "medium", "hard"] # three difficulty level [easy, medium, hard]
   env_folder: "environment_0" # configurations for dynamic and static obstacles
   world_box: [-20, 80, -10, 10, 0.0, 10] # Bounding box applied during training, exiting this box terminates the episode. [xmin, xmax, ymin, ymax, zmin, zmax]
   goal_vel: [3.0, 0.0, 0.0] # goal velicty for tracking vx, vy, vz
@@ -39,7 +39,7 @@ simulation:
   seed: 1
   sim_dt: 0.02
   max_t: 20.0
-  num_envs: 100 
+  num_envs: 300 # overall; should be divisible by the number of difficulty levels given (in the best case)
   num_threads: 10
 
 quadrotor_dynamics:

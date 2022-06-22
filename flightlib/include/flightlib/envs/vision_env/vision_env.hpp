@@ -133,7 +133,7 @@ class VisionEnv final : public EnvBase {
 
 
   int num_detected_obstacles_;
-  std::string difficulty_level_;
+  std::vector<std::string> difficulty_levels_;
   std::string env_folder_;
   std::vector<Scalar> world_box_;
 
