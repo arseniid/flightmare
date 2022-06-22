@@ -116,11 +116,6 @@ void VisionVecEnv<EnvBaseName>::perAgentStep(int agent_id,
   Scalar terminal_reward = 0;
   done[agent_id] = this->envs_[agent_id]->isTerminalState(terminal_reward);
 
-  /*std::cout << "For the environment:\n"
-            << "envs_[agent_id]      =       [" << *(this->envs_[agent_id]) << "]\n"
-            << "agent_id             =       [" << agent_id << "]\n"
-            << "obstacle_cfg_path_   =       [" << this->envs_[agent_id]->obstacle_cfg_path_ << "]" << std::endl;*/
-
   this->envs_[agent_id]->updateExtraInfo();
   for (int j = 0; j < extra_info.cols(); j++)
     extra_info(agent_id, j) =

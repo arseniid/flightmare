@@ -105,7 +105,6 @@ class VisionEnv final : public EnvBase {
   }
 
   std::unordered_map<std::string, float> extra_info_;
-  //std::string obstacle_cfg_path_;
 
  private:
   bool computeReward(Ref<Vector<>> reward);
@@ -136,6 +135,9 @@ class VisionEnv final : public EnvBase {
   std::vector<std::string> difficulty_levels_;
   std::string env_folder_;
   std::vector<Scalar> world_box_;
+
+  // simulation
+  int num_envs_;
 
   // observations and actions (for RL)
   Vector<visionenv::kNObs> pi_obs_;

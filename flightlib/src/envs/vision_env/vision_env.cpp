@@ -60,10 +60,30 @@ void VisionEnv::init() {
       "Cannot config RGB Camera. Something wrong with the config file");
   }
 
+  // checks for taking correct obstacle config
+  std::string level_env_path;
+  int num_levels = difficulty_levels_.size();
+  if (num_envs_ <= num_levels) {
+    level_env_path = difficulty_levels_[env_id_] + std::string("/") +
+                     env_folder_;
+    logger_.info(
+      "Only one environment specified: Load configuration from " +
+      level_env_path);
+  } else {
+    if (num_envs_ % num_levels != 0 || num_envs_ > 100 * num_levels) {
+      logger_.warn(
+        "Either overall number of environments is not fully divisible by "
+        "the number of difficulty levels, or too many environments specified! "
+        "Some environments might be taken multiple times...");
+    }
+    level_env_path = difficulty_levels_[(env_id_ / (num_envs_ / num_levels)) % num_levels] +
+                     std::string("/") + std::string("environment_") +
+                     std::to_string((env_id_ % (num_envs_ / num_levels)) % 100);
+  }
+
   obstacle_cfg_path_ = getenv("FLIGHTMARE_PATH") +
                        std::string("/flightpy/configs/vision/") +
-                       difficulty_levels_[env_id_ / 100] + std::string("/") +
-                       std::string("environment_") + std::to_string(env_id_ % 100); // TODO: remove the hard-coded 100 -> only works for overall 300 envs
+                       level_env_path;
 
   // add dynamic objects
   std::string dynamic_object_yaml =
@@ -440,6 +460,7 @@ bool VisionEnv::loadParam(const YAML::Node &cfg) {
   if (cfg["simulation"]) {
     sim_dt_ = cfg["simulation"]["sim_dt"].as<Scalar>();
     max_t_ = cfg["simulation"]["max_t"].as<Scalar>();
+    num_envs_ = cfg["simulation"]["num_envs"].as<int>();
   } else {
     logger_.error("Cannot load [quadrotor_env] parameters");
     return false;
