@@ -12,7 +12,12 @@ import torch as th
 from gym import spaces
 from mpl_toolkits.mplot3d import Axes3D
 #
-from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.policies import (
+    BasePolicy,
+    ActorCriticPolicy,
+    ActorCriticCnnPolicy,
+    MultiInputActorCriticPolicy,
+)
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 from torch.nn import functional as F
@@ -74,6 +79,12 @@ class PPO(OnPolicyAlgorithm):
         Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
     """
+
+    policy_aliases: Dict[str, Type[BasePolicy]] = {
+        "MlpPolicy": ActorCriticPolicy,
+        "CnnPolicy": ActorCriticCnnPolicy,
+        "MultiInputPolicy": MultiInputActorCriticPolicy,
+    }
 
     def __init__(
         self,
@@ -303,7 +314,7 @@ class PPO(OnPolicyAlgorithm):
         self.logger.record("train/clip_range", clip_range)
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
-        
+
     def learn(
         self,
         total_timesteps: int,

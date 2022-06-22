@@ -80,7 +80,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         super(OnPolicyAlgorithm, self).__init__(
             policy=policy,
             env=env,
-            policy_base=ActorCriticPolicy,
+            #policy_base=ActorCriticPolicy,  # TODO: Why is it here? Fails with: unexpected keyword argument 'policy_base'
             learning_rate=learning_rate,
             policy_kwargs=policy_kwargs,
             verbose=verbose,
