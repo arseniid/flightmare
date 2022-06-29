@@ -343,20 +343,20 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
 
   // return all reward components for debug purposes
   // only the total reward is used by the RL algorithm
-  reward << lin_vel_reward, collision_penalty, ang_vel_penalty, survive_rew_,
-    total_reward;
+  reward << lin_vel_reward, collision_penalty, 0.0, survive_rew_,
+    lin_vel_reward + survive_rew_ + collision_penalty;
   return true;
 }
 
 bool VisionEnv::isTerminalState(Scalar &reward) {
   if (is_collision_) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
   // simulation time out
   if (cmd_.t >= max_t_ - sim_dt_) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
@@ -370,12 +370,12 @@ bool VisionEnv::isTerminalState(Scalar &reward) {
   bool z_valid = quad_state_.x(QS::POSZ) >= world_box_[4] + safty_threshold &&
                  quad_state_.x(QS::POSZ) <= world_box_[5] - safty_threshold;
   if (!x_valid || !y_valid || !z_valid) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
   if (quad_state_.x(QS::POSX) >= 60) {
-    reward = 1.0;
+    reward = 20.0;
     return true;
   }
   return false;
