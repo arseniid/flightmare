@@ -174,10 +174,17 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
 
   // compute relative distance to dynamic obstacles
   std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>> relative_pos;
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>> relative_vel;
   for (int i = 0; i < (int)dynamic_objects_.size(); i++) {
     // compute relative position vector
     Vector<3> delta_pos = dynamic_objects_[i]->getPos() - quad_state_.p;
     relative_pos.push_back(delta_pos);
+
+    // compute first order approximation of obstacle velocity
+    relative_vel.push_back(quad_state_.R() * // TODO: Check if velocity transformed correctly into body coordinates
+                           (dynamic_objects_[i]->getPos() - dynamic_objects_old_pos_[i]) /
+                           sim_dt_);
+    dynamic_objects_old_pos_[i] = dynamic_objects_[i]->getPos();
 
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
@@ -203,6 +210,8 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
     Vector<3> delta_pos = static_objects_[i]->getPos() - quad_state_.p;
     relative_pos.push_back(delta_pos);
 
+    Vector<3> zero_vel = {0.0, 0.0, 0.0};
+    relative_vel.push_back(zero_vel);
 
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
@@ -229,25 +238,34 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
       // if enough obstacles in the environment
       if (relative_pos_norm_[sort_idx] <= max_detection_range_) {
         // if obstacles are within detection range
+        Vector<3> zero_vel = {0.0, 0.0, 0.0};
+        // assert correct velocity computation for static and dynamic obstacles
+        if (relative_vel[sort_idx] != zero_vel) {
+          assert(!(dynamic_objects_[sort_idx % dynamic_objects_.size()]->isStatic()));
+        } else {
+          assert(static_objects_[sort_idx % dynamic_objects_.size()]->isStatic());
+        }
         obs_state.segment<visionenv::kNObstaclesState>(
           idx * visionenv::kNObstaclesState)
           << relative_pos[sort_idx],
+          relative_vel[sort_idx],
           obstacle_radius_[sort_idx];
       } else {
         // if obstacles are beyong detection range
         obs_state.segment<visionenv::kNObstaclesState>(
-          idx * visionenv::kNObstaclesState) =
-          Vector<4>(max_detection_range_, max_detection_range_,
-                    max_detection_range_, obstacle_radius_[sort_idx]);
+          idx * visionenv::kNObstaclesState)
+          << max_detection_range_, max_detection_range_, max_detection_range_,
+          relative_vel[sort_idx],
+          obstacle_radius_[sort_idx];
       }
 
     } else {
       // if not enough obstacles in the environment
       obs_state.segment<visionenv::kNObstaclesState>(
-        idx * visionenv::kNObstaclesState) =
-        Vector<visionenv::kNObstaclesState>(max_detection_range_,
-                                            max_detection_range_,
-                                            max_detection_range_, 0.0);
+        idx * visionenv::kNObstaclesState)
+        << max_detection_range_, max_detection_range_, max_detection_range_,
+        0.0, 0.0, 0.0,
+        0.0;
     }
     idx += 1;
   }
@@ -549,6 +567,11 @@ bool VisionEnv::configDynamicObjects(const std::string &yaml_file) {
 
     dynamic_objects_.push_back(obj);
   }
+
+  for (int i = 0; i < (int)dynamic_objects_.size(); i++) {
+    dynamic_objects_old_pos_.push_back(dynamic_objects_[i]->getPos());
+  }
+
   num_dynamic_objects_ = dynamic_objects_.size();
   return true;
 }

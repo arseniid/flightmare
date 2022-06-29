@@ -31,7 +31,7 @@ enum Vision : int {
   kNQuadState = 25,
 
   kNObstacles = 10,
-  kNObstaclesState = 4,
+  kNObstaclesState = 7,
 
   // observations
   kObs = 0,
@@ -129,6 +129,7 @@ class VisionEnv final : public EnvBase {
   Scalar max_detection_range_;
   std::vector<Scalar> relative_pos_norm_;
   std::vector<Scalar> obstacle_radius_;
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>> dynamic_objects_old_pos_;
 
 
   int num_detected_obstacles_;
