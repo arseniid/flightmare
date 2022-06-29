@@ -183,7 +183,7 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
     Scalar obstacle_dist = delta_pos.norm();
     // limit observation range
     if (obstacle_dist > max_detection_range_) {
-      obstacle_dist = max_detection_range_;
+      obstacle_dist = max_detection_range_;  // TODO: why?
     }
     relative_pos_norm_.push_back(obstacle_dist);
 
@@ -207,7 +207,7 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
     if (obstacle_dist > max_detection_range_) {
-      obstacle_dist = max_detection_range_;
+      obstacle_dist = max_detection_range_;  // TODO: and here
     }
     relative_pos_norm_.push_back(obstacle_dist);
 
@@ -234,7 +234,8 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
           << relative_pos[sort_idx],
           obstacle_radius_[sort_idx];
       } else {
-        // if obstacles are beyong detection range
+        // if obstacles are beyong detection range TODO check as I suppose never happens
+        std::cout << "Something which never happens just happened" << std::endl;
         obs_state.segment<visionenv::kNObstaclesState>(
           idx * visionenv::kNObstaclesState) =
           Vector<4>(max_detection_range_, max_detection_range_,
@@ -321,8 +322,7 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
         : max_detection_range_;
 
     const Scalar dist_margin = 0.5;
-    if (relative_pos_norm_[sort_idx] <=
-        obstacle_radius_[sort_idx] + dist_margin) {
+    if (relative_dist <= obstacle_radius_[sort_idx] + dist_margin) {
       // compute distance penalty
       collision_penalty += collision_coeff_ * std::exp(-1.0 * relative_dist);
     }
@@ -334,29 +334,34 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
   Scalar lin_vel_reward =
     vel_coeff_ * (quad_state_.v - goal_linear_vel_).norm();
 
+  Scalar time_penalty = time_coeff_ * cmd_.t;
+
   // - angular velocity penalty, to avoid oscillations
   const Scalar ang_vel_penalty = angular_vel_coeff_ * quad_state_.w.norm();
 
+  // - passing in x-direction reward
+  Scalar passing_rew = passing_coeff_ * (-quad_old_state_.x(QS::POSX) + quad_state_.x(QS::POSX));
+
   //  change progress reward as survive reward
   const Scalar total_reward =
-    lin_vel_reward + collision_penalty + ang_vel_penalty + survive_rew_;
+    lin_vel_reward + time_penalty + collision_penalty + ang_vel_penalty + passing_rew;
 
   // return all reward components for debug purposes
   // only the total reward is used by the RL algorithm
-  reward << lin_vel_reward, collision_penalty, ang_vel_penalty, survive_rew_,
+  reward << lin_vel_reward, time_penalty, collision_penalty, ang_vel_penalty, passing_rew,
     total_reward;
   return true;
 }
 
 bool VisionEnv::isTerminalState(Scalar &reward) {
   if (is_collision_) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
   // simulation time out
   if (cmd_.t >= max_t_ - sim_dt_) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
@@ -370,12 +375,12 @@ bool VisionEnv::isTerminalState(Scalar &reward) {
   bool z_valid = quad_state_.x(QS::POSZ) >= world_box_[4] + safty_threshold &&
                  quad_state_.x(QS::POSZ) <= world_box_[5] - safty_threshold;
   if (!x_valid || !y_valid || !z_valid) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
   if (quad_state_.x(QS::POSX) >= 60) {
-    reward = 1.0;
+    reward = 0.0;
     return true;
   }
   return false;
@@ -469,9 +474,10 @@ bool VisionEnv::loadParam(const YAML::Node &cfg) {
   if (cfg["rewards"]) {
     // load reward coefficients for reinforcement learning
     vel_coeff_ = cfg["rewards"]["vel_coeff"].as<Scalar>();
+    time_coeff_ = cfg["rewards"]["time_coeff"].as<Scalar>();
     collision_coeff_ = cfg["rewards"]["collision_coeff"].as<Scalar>();
     angular_vel_coeff_ = cfg["rewards"]["angular_vel_coeff"].as<Scalar>();
-    survive_rew_ = cfg["rewards"]["survive_rew"].as<Scalar>();
+    passing_coeff_ = cfg["rewards"]["passing_coeff"].as<Scalar>();
 
     // load reward settings
     reward_names_ = cfg["rewards"]["names"].as<std::vector<std::string>>();
