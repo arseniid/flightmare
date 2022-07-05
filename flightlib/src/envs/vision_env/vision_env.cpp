@@ -188,15 +188,17 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
 
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
-    // limit observation range
-    if (obstacle_dist > max_detection_range_) {
-      obstacle_dist = max_detection_range_;
-    }
-    relative_pos_norm_.push_back(obstacle_dist);
 
-    // store the obstacle radius
+    // compute the obstacle radius
     Scalar obs_radius = dynamic_objects_[i]->getScale()[0] / 2;
-    obstacle_radius_.push_back(obs_radius);
+
+    if (obstacle_dist - obs_radius <= max_detection_range_) {
+      relative_pos_norm_.push_back(obstacle_dist);
+      obstacle_radius_.push_back(obs_radius);
+    } else {
+      relative_pos_norm_.push_back(999.0);
+      obstacle_radius_.push_back(0.0);
+    }
 
     //
     if (obstacle_dist < obs_radius) {
@@ -215,14 +217,17 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
 
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
-    if (obstacle_dist > max_detection_range_) {
-      obstacle_dist = max_detection_range_;
-    }
-    relative_pos_norm_.push_back(obstacle_dist);
 
-    // store the obstacle radius
+    // compute the obstacle radius
     Scalar obs_radius = static_objects_[i]->getScale()[0] / 2;
-    obstacle_radius_.push_back(obs_radius);
+
+    if (obstacle_dist - obs_radius <= max_detection_range_) {
+      relative_pos_norm_.push_back(obstacle_dist);
+      obstacle_radius_.push_back(obs_radius);
+    } else {
+      relative_pos_norm_.push_back(999.0);
+      obstacle_radius_.push_back(0.0);
+    }
 
     if (obstacle_dist < obs_radius) {
       is_collision_ = true;
@@ -231,12 +236,15 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
 
   // std::cout << relative_pos_norm_ << std::endl;
   size_t idx = 0;
-  for (size_t sort_idx : sort_indexes(relative_pos_norm_)) {
+  std::vector<Scalar> rel_pos_norm_surface = relative_pos_norm_;
+  std::transform(relative_pos_norm_.begin(), relative_pos_norm_.end(), obstacle_radius_.begin(), rel_pos_norm_surface.begin(), std::minus<Scalar>());
+  std::vector<size_t> indices_sorted = sort_indexes(rel_pos_norm_surface);
+  for (size_t sort_idx : indices_sorted) {
     if (idx >= visionenv::kNObstacles) break;
 
     if (idx < relative_pos.size()) {
       // if enough obstacles in the environment
-      if (relative_pos_norm_[sort_idx] <= max_detection_range_) {
+      if (rel_pos_norm_surface[sort_idx] <= max_detection_range_) {
         // if obstacles are within detection range
         Vector<3> zero_vel = {0.0, 0.0, 0.0};
         // assert correct velocity computation for static and dynamic obstacles
@@ -255,8 +263,8 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
         obs_state.segment<visionenv::kNObstaclesState>(
           idx * visionenv::kNObstaclesState)
           << max_detection_range_, max_detection_range_, max_detection_range_,
-          relative_vel[sort_idx],
-          obstacle_radius_[sort_idx];
+          0.0, 0.0, 0.0,
+          0.0;
       }
 
     } else {
