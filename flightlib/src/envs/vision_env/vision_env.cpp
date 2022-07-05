@@ -153,14 +153,16 @@ bool VisionEnv::getObs(Ref<Vector<>> obs) {
 
   // get N most closest obstacles as the observation
   Vector<visionenv::kNObstacles * visionenv::kNObstaclesState> obstacle_obs;
-  getObstacleState(obstacle_obs);
+  Vector<visionenv::kNCuts * visionenv::kNCuts * visionenv::kNFreePathsState> free_paths_obs;
+  getObstacleState(obstacle_obs, free_paths_obs);
 
   // Observations
-  obs << goal_linear_vel_, ori, quad_state_.v, obstacle_obs;
+  obs << goal_linear_vel_, ori, quad_state_.v, obstacle_obs, free_paths_obs;
   return true;
 }
 
-bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
+bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state,
+                                 Ref<Vector<>> free_paths) {
   if (dynamic_objects_.size() <= 0 || static_objects_.size() <= 0) {
     logger_.error("No dynamic or static obstacles.");
     return false;
@@ -278,7 +280,72 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
     idx += 1;
   }
 
+  getPolarVoxel(relative_pos, relative_pos_norm_, obstacle_radius_, indices_sorted, free_paths);
+
   return true;
+}
+
+bool VisionEnv::getPolarVoxel(
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
+  std::vector<Scalar> rel_pos_norm_list,
+  std::vector<Scalar> obs_radius_list,
+  std::vector<size_t> indices_sorted,
+  Ref<Vector<>> polar_voxel) {
+    // for kNCuts=8: phi, theta angles go from (approx.) -pi/4 to pi/4
+    for (int f = -visionenv::kNCuts / 2; f < visionenv::kNCuts / 2; ++f) {
+      for (int t = -visionenv::kNCuts / 2; t < visionenv::kNCuts / 2; ++t) {
+        Scalar f_cell = (f + 0.5) * (M_PI / visionenv::kNCuts) / 2;
+        Scalar t_cell = (t + 0.5) * (M_PI / visionenv::kNCuts) / 2;
+        polar_voxel.segment<visionenv::kNFreePathsState>(
+          ((f + visionenv::kNCuts / 2) * visionenv::kNCuts + (t + visionenv::kNCuts / 2)) * visionenv::kNFreePathsState)
+          << getCartesianFromAng(f_cell, t_cell),
+             getDistanceToClosestObstacle(rel_pos_list_B, rel_pos_norm_list, obs_radius_list, indices_sorted, f_cell, t_cell);
+      }
+    }
+
+    return true;
+}
+
+Scalar VisionEnv::getDistanceToClosestObstacle(
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
+  std::vector<Scalar> rel_pos_norm_list,
+  std::vector<Scalar> obs_radius_list,
+  std::vector<size_t> indices_sorted,
+  Scalar f_cell, Scalar t_cell) {
+    Matrix<3, 3> R = quad_state_.R();
+    R.transposeInPlace();
+    Vector<3> ray = getCartesianFromAng(f_cell, t_cell);
+    Scalar d_min = max_detection_range_;
+    for (size_t sort_idx : indices_sorted) {
+        Vector<3> rel_pos_W = R * rel_pos_list_B[sort_idx]; // in world coordinates!
+        if (rel_pos_norm_list[sort_idx] == 999.0) {
+          break; // obstacle too far -> will be mapped anyway to `max_detection_range_`
+        }
+        Scalar r = obs_radius_list[sort_idx];
+        Scalar t_ca = rel_pos_W.dot(ray);
+        if (t_ca < 0) {
+          continue; // collision behind the ray origin
+        }
+        Scalar ray_dist = std::sqrt(rel_pos_W.squaredNorm() - t_ca * t_ca);
+        if (ray_dist > r) {
+          continue; // no collision
+        }
+        Scalar t_hc = std::sqrt(r * r - ray_dist * ray_dist);
+        if (t_ca - t_hc < d_min) {
+          d_min = t_ca - t_hc;
+          break; // obstacles are sorted by distance -> no other obstacle expected to be closer
+        }
+    }
+    return d_min; // TODO: needs normalization?
+}
+
+Vector<3> VisionEnv::getCartesianFromAng(Scalar phi, Scalar theta) {
+  Vector<3> cartesian = {
+    std::sin(theta) * std::cos(phi),
+    std::sin(theta) * std::sin(phi),
+    std::cos(theta)
+  };
+  return cartesian;
 }
 
 bool VisionEnv::step(const Ref<Vector<>> act, Ref<Vector<>> obs,
