@@ -153,7 +153,7 @@ bool VisionEnv::getObs(Ref<Vector<>> obs) {
 
   // get N most closest obstacles as the observation
   Vector<visionenv::kNObstacles * visionenv::kNObstaclesState> obstacle_obs;
-  Vector<visionenv::kNCuts * visionenv::kNCuts * visionenv::kNFreePathsState> free_paths_obs;
+  Vector<visionenv::kNFreePaths * visionenv::kNFreePathsState> free_paths_obs;
   getObstacleState(obstacle_obs, free_paths_obs);
 
   // Observations
@@ -291,16 +291,32 @@ bool VisionEnv::getPolarVoxel(
   std::vector<Scalar> obs_radius_list,
   std::vector<size_t> indices_sorted,
   Ref<Vector<>> polar_voxel) {
+    std::vector<Vector<3>> all_free_paths;
+    std::vector<Scalar> free_path_lengths;
     // for kNCuts=8: phi, theta angles go from (approx.) -pi/4 to pi/4
     for (int f = -visionenv::kNCuts / 2; f < visionenv::kNCuts / 2; ++f) {
       for (int t = -visionenv::kNCuts / 2; t < visionenv::kNCuts / 2; ++t) {
         Scalar f_cell = (f + 0.5) * (M_PI / visionenv::kNCuts) / 2;
         Scalar t_cell = (t + 0.5) * (M_PI / visionenv::kNCuts) / 2;
-        polar_voxel.segment<visionenv::kNFreePathsState>(
-          ((f + visionenv::kNCuts / 2) * visionenv::kNCuts + (t + visionenv::kNCuts / 2)) * visionenv::kNFreePathsState)
-          << getCartesianFromAng(f_cell, t_cell),
-             getDistanceToClosestObstacle(rel_pos_list_B, rel_pos_norm_list, obs_radius_list, indices_sorted, f_cell, t_cell);
+        all_free_paths.push_back(getCartesianFromAng(f_cell, t_cell));
+        free_path_lengths.push_back(getDistanceToClosestObstacle(rel_pos_list_B, rel_pos_norm_list, obs_radius_list, indices_sorted, f_cell, t_cell));
       }
+    }
+
+    size_t amount = 0;
+    std::vector<size_t> free_path_indices_sorted = sort_indexes(free_path_lengths);
+    // sort descending by the free path lengths
+    for (size_t sorted_idx = free_path_indices_sorted.size() - 1; sorted_idx >= 0; sorted_idx--) {
+      if (amount >= visionenv::kNFreePaths) {
+        break;
+      }
+
+      polar_voxel.segment<visionenv::kNFreePathsState>(
+        amount * visionenv::kNFreePathsState)
+        << all_free_paths[sorted_idx],
+           free_path_lengths[sorted_idx];
+
+      amount++;
     }
 
     return true;

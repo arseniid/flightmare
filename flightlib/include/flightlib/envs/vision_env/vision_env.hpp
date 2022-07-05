@@ -34,11 +34,13 @@ enum Vision : int {
   kNObstaclesState = 7,
 
   kNCuts = 8,
+
+  kNFreePaths = 9,
   kNFreePathsState = 4,
 
   // observations
   kObs = 0,
-  kNObs = 15 + kNObstacles * kNObstaclesState + kNCuts * kNCuts * kNFreePathsState,
+  kNObs = 15 + kNObstacles * kNObstaclesState + kNFreePaths * kNFreePathsState,
 
   // control actions
   kAct = 0,
