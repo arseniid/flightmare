@@ -123,7 +123,7 @@ void VisionVecEnv<EnvBaseName>::perAgentStep(int agent_id,
 
   if (done[agent_id]) {
     this->envs_[agent_id]->reset(obs.row(agent_id), random_reset_);
-    reward(agent_id, reward.cols() - 1) += terminal_reward;
+    reward(agent_id, reward.cols() - 1) = terminal_reward;
   }
 }
 

@@ -462,13 +462,17 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
 
 bool VisionEnv::isTerminalState(Scalar &reward) {
   if (is_collision_) {
-    reward = fabs(quad_state_.x(QS::VELX)) * -10.0;
+    if (quad_state_.v.norm() <= 1.0) {
+      reward = -1.0;
+    } else {
+      reward = fabs(quad_state_.v.norm()) * -1.0;
+    }
     return true;
   }
 
   // simulation time out
   if (cmd_.t >= max_t_ - sim_dt_) {
-    reward = -10.0;
+    reward = -1.0;
     return true;
   }
 
@@ -482,12 +486,12 @@ bool VisionEnv::isTerminalState(Scalar &reward) {
   bool z_valid = quad_state_.x(QS::POSZ) >= world_box_[4] + safty_threshold &&
                  quad_state_.x(QS::POSZ) <= world_box_[5] - safty_threshold;
   if (!x_valid || !y_valid || !z_valid) {
-    reward = -10.0;
+    reward = -1.0;
     return true;
   }
 
   if (quad_state_.x(QS::POSX) >= 60) {
-    reward = 30.0;
+    reward = 1.0;
     return true;
   }
   return false;
