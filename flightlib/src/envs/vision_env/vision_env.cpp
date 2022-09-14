@@ -157,7 +157,7 @@ bool VisionEnv::getObs(Ref<Vector<>> obs) {
   getObstacleState(obstacle_obs, free_paths_obs);
 
   // Observations
-  obs << goal_linear_vel_, ori, quad_state_.v, obstacle_obs, free_paths_obs;
+  obs << goal_linear_vel_, ori, quad_state_.v, /*obstacle_obs,*/ free_paths_obs;
   return true;
 }
 
