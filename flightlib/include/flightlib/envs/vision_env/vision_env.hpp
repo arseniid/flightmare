@@ -35,7 +35,7 @@ enum Vision : int {
 
   kNCuts = 8,
 
-  kNFreePaths = 9,
+  kNFreePaths = 16,
   kNFreePathsState = 4,
 
   // observations

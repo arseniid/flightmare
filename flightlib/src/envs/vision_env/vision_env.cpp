@@ -462,10 +462,10 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
 
 bool VisionEnv::isTerminalState(Scalar &reward) {
   if (is_collision_) {
-    if (quad_state_.v.norm() <= 1.0) {
-      reward = -1.0;
+    if (quad_state_.v.norm() <= 2.0) {
+      reward = -10.0;
     } else {
-      reward = fabs(quad_state_.v.norm()) * -1.0;
+      reward = fabs(quad_state_.v.norm()) * -10.0;
     }
     return true;
   }
