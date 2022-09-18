@@ -70,7 +70,10 @@ class VisionEnv final : public EnvBase {
   bool getImage(Ref<ImgVector<>> img, const bool rgb = true) override;
   bool getDepthImage(Ref<DepthImgVector<>> img) override;
 
-  bool getObstacleState(Ref<Vector<>> obstacle_obs, Ref<Vector<>> free_paths_obs);
+  bool getObstacleState(
+    Ref<Vector<>> obstacle_obs,
+    Ref<Vector<>> free_paths_obs,
+    Scalar sim_dt = 0.0);
   bool getPolarVoxel(
     std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
     std::vector<Scalar> rel_pos_norm_list,

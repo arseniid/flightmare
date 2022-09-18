@@ -162,7 +162,8 @@ bool VisionEnv::getObs(Ref<Vector<>> obs) {
 }
 
 bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state,
-                                 Ref<Vector<>> free_paths) {
+                                 Ref<Vector<>> free_paths,
+                                 Scalar sim_dt) {
   if (dynamic_objects_.size() <= 0 || static_objects_.size() <= 0) {
     logger_.error("No dynamic or static obstacles.");
     return false;
@@ -170,6 +171,11 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state,
   // make sure to reset the collision penalty
   relative_pos_norm_.clear();
   obstacle_radius_.clear();
+
+  // set correct simulation timestep
+  if (sim_dt == 0.0) {
+    sim_dt = sim_dt_;
+  }
 
   //
   quad_ptr_->getState(&quad_state_);
@@ -183,9 +189,9 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state,
     relative_pos.push_back(delta_pos);
 
     // compute first order approximation of obstacle velocity
-    relative_vel.push_back(quad_state_.R() * // TODO: Check if velocity transformed correctly into body coordinates
+    relative_vel.push_back(/*quad_state_.R() * // TODO: Check if velocity transformed correctly into body coordinates */
                            (dynamic_objects_[i]->getPos() - dynamic_objects_old_pos_[i]) /
-                           sim_dt_);
+                           sim_dt);
     dynamic_objects_old_pos_[i] = dynamic_objects_[i]->getPos();
 
     // compute relative distance
