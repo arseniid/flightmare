@@ -30,12 +30,12 @@ enum Vision : int {
   //
   kNQuadState = 25,
 
-  kNObstacles = 10,
+  kNObstacles = 15,
   kNObstaclesState = 7,
 
   kNCuts = 8,
 
-  kNFreePaths = 16,
+  kNFreePaths = 9,
   kNFreePathsState = 4,
 
   // observations

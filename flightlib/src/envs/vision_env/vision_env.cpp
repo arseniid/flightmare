@@ -429,7 +429,7 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
         ? relative_pos_norm_[sort_idx]
         : max_detection_range_;
 
-    const Scalar dist_margin = 0.5;
+    const Scalar dist_margin = 0.1;
     if (relative_pos_norm_[sort_idx] <=
         obstacle_radius_[sort_idx] + dist_margin) {
       // compute distance penalty
@@ -462,17 +462,13 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
 
 bool VisionEnv::isTerminalState(Scalar &reward) {
   if (is_collision_) {
-    if (quad_state_.v.norm() <= 2.0) {
-      reward = -10.0;
-    } else {
-      reward = fabs(quad_state_.v.norm()) * -10.0;
-    }
+    reward = -10.0;
     return true;
   }
 
   // simulation time out
   if (cmd_.t >= max_t_ - sim_dt_) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
@@ -486,12 +482,12 @@ bool VisionEnv::isTerminalState(Scalar &reward) {
   bool z_valid = quad_state_.x(QS::POSZ) >= world_box_[4] + safty_threshold &&
                  quad_state_.x(QS::POSZ) <= world_box_[5] - safty_threshold;
   if (!x_valid || !y_valid || !z_valid) {
-    reward = -1.0;
+    reward = -10.0;
     return true;
   }
 
   if (quad_state_.x(QS::POSX) >= 60) {
-    reward = 1.0;
+    reward = 10.0;
     return true;
   }
   return false;
