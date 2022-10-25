@@ -487,7 +487,7 @@ bool VisionEnv::isTerminalState(Scalar &reward) {
   }
 
   if (quad_state_.x(QS::POSX) >= 60) {
-    reward = 10.0;
+    reward = 50.0;
     return true;
   }
   return false;
