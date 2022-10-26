@@ -1,17 +1,19 @@
 environment:
-  level: ["easy", "medium", "hard"] # three difficulty level [easy, medium, hard]
+  level: ["hard"] # three difficulty level [easy, medium, hard]
   env_folder: "environment_0" # configurations for dynamic and static obstacles
   world_box: [-20, 80, -10, 10, 0.0, 10] # Bounding box applied during training, exiting this box terminates the episode. [xmin, xmax, ymin, ymax, zmin, zmax]
-  goal_vel: [3.0, 0.0, 0.0] # goal velicty for tracking vx, vy, vz
+  goal_vel: [5.0, 0.0, 0.0] # goal velicty for tracking vx, vy, vz
   max_detection_range: 10.0 # max obstacle detection range [m], obstacles outside this range will not be detected. The number of obstacles detected is fixed to 10, if less than 10 obstacles are within detectable range, the observation is padded with 10.0
 
 rewards:
+  move_coeff: 0.3
   vel_coeff: -0.01
-  collision_coeff: -0.01
+  collision_coeff: -0.5
   angular_vel_coeff: -0.0001
   survive_rew: 0.03
   names:
     [
+      "move_reward",
       "lin_vel_reward",
       "collision_penalty",
       "ang_vel_penalty",
@@ -38,9 +40,9 @@ unity:
 simulation:
   seed: 1
   sim_dt: 0.02
-  max_t: 20.0
-  num_envs: 300 # overall; should be divisible by the number of difficulty levels given (in the best case)
-  num_threads: 10
+  max_t: 60.0
+  num_envs: 100 # overall; should be divisible by the number of difficulty levels given (in the best case)
+  num_threads: 12
 
 quadrotor_dynamics:
   mass: 0.752
