@@ -30,12 +30,17 @@ enum Vision : int {
   //
   kNQuadState = 25,
 
-  kNObstacles = 10,
-  kNObstaclesState = 4,
+  kNObstacles = 15,
+  kNObstaclesState = 7,
+
+  kNCuts = 8,
+
+  kNFreePaths = 9,
+  kNFreePathsState = 4,
 
   // observations
   kObs = 0,
-  kNObs = 15 + kNObstacles * kNObstaclesState,
+  kNObs = 15 + kNObstacles * kNObstaclesState + kNFreePaths * kNFreePathsState,
 
   // control actions
   kAct = 0,
@@ -65,7 +70,21 @@ class VisionEnv final : public EnvBase {
   bool getImage(Ref<ImgVector<>> img, const bool rgb = true) override;
   bool getDepthImage(Ref<DepthImgVector<>> img) override;
 
-  bool getObstacleState(Ref<Vector<>> obstacle_obs);
+  bool getObstacleState(Ref<Vector<>> obstacle_obs, Ref<Vector<>> free_paths_obs);
+  bool getPolarVoxel(
+    std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
+    std::vector<Scalar> rel_pos_norm_list,
+    std::vector<Scalar> obs_radius_list,
+    std::vector<size_t> indices_sorted,
+    Ref<Vector<>> polar_voxel);
+  Scalar getDistanceToClosestObstacle(
+    std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
+    std::vector<Scalar> rel_pos_norm_list,
+    std::vector<Scalar> obs_radius_list,
+    std::vector<size_t> indices_sorted,
+    Scalar f_cell, Scalar t_cell);
+  Vector<3> getCartesianFromAng(Scalar phi, Scalar theta);
+
   // get quadrotor states
   bool getQuadAct(Ref<Vector<>> act) const;
   bool getQuadState(Ref<Vector<>> state) const;
@@ -121,7 +140,7 @@ class VisionEnv final : public EnvBase {
   Logger logger_{"VisionEnv"};
 
   // Define reward for training
-  Scalar vel_coeff_, collision_coeff_, angular_vel_coeff_, survive_rew_;
+  Scalar move_coeff_, vel_coeff_, collision_coeff_, angular_vel_coeff_, survive_rew_;
   Vector<3> goal_linear_vel_;
   bool is_collision_;
 
@@ -129,12 +148,16 @@ class VisionEnv final : public EnvBase {
   Scalar max_detection_range_;
   std::vector<Scalar> relative_pos_norm_;
   std::vector<Scalar> obstacle_radius_;
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>> dynamic_objects_old_pos_;
 
 
   int num_detected_obstacles_;
-  std::string difficulty_level_;
+  std::vector<std::string> difficulty_levels_;
   std::string env_folder_;
   std::vector<Scalar> world_box_;
+
+  // simulation
+  int num_envs_;
 
   // observations and actions (for RL)
   Vector<visionenv::kNObs> pi_obs_;

@@ -97,18 +97,35 @@ def plot3d_traj(ax3d, pos, vel):
     # z_f = (zmax - zmin) / (xmax - xmin)
     # ax3d.set_box_aspect((x_f, y_f * 2, z_f * 2))
 
-def test_policy(env, model, render=False):
+
+def test_policy(env, model, render=False, recurrent=False):
     max_ep_length = env.max_episode_steps
     num_rollouts = 5
     frame_id = 0
     if render:
         env.connectUnity()
+    if recurrent:  # has to be set (https://sb3-contrib.readthedocs.io/en/master/modules/ppo_recurrent.html#example)
+        lstm_states = None
+        num_envs = 1
+        episode_starts = np.ones(
+            (num_envs,), dtype=bool
+        )  # used to reset the lstm states
     for n_roll in range(num_rollouts):
         obs, done, ep_len = env.reset(), False, 0
         while not (done or (ep_len >= max_ep_length)):
             # print(obs)
-            act, _ = model.predict(obs, deterministic=True)
+            if recurrent:
+                act, lstm_states = model.predict(
+                    obs,
+                    state=lstm_states,
+                    episode_start=episode_starts,
+                    deterministic=True,
+                )
+            else:
+                act, _ = model.predict(obs, deterministic=True)
             obs, rew, done, info = env.step(act)
+
+            episode_starts = done
 
             #
             env.render(ep_len)
@@ -120,7 +137,7 @@ def test_policy(env, model, render=False):
             # cv2.waitKey(100)
 
             # ======RGB Image=========
-            # img =env.getImage(rgb=True) 
+            # img = env.getImage(rgb=True)
             # rgb_img = np.reshape(
             #    img[0], (env.img_height, env.img_width, 3))
             # cv2.imshow("rgb_img", rgb_img)

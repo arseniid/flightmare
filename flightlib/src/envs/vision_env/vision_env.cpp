@@ -16,17 +16,17 @@ VisionEnv::VisionEnv(const std::string &cfg_path, const int env_id)
   }
   // load configuration file
   cfg_ = YAML::LoadFile(cfg_path);
+  env_id_ = env_id;
   //
   init();
-  env_id_ = env_id;
 }
 
 VisionEnv::VisionEnv(const YAML::Node &cfg_node, const int env_id) : EnvBase() {
   cfg_ = cfg_node;
+  env_id_ = env_id;
 
   //
   init();
-  env_id_ = env_id;
 }
 
 void VisionEnv::init() {
@@ -60,9 +60,30 @@ void VisionEnv::init() {
       "Cannot config RGB Camera. Something wrong with the config file");
   }
 
+  // checks for taking correct obstacle config
+  std::string level_env_path;
+  int num_levels = difficulty_levels_.size();
+  if (num_envs_ <= num_levels) {
+    level_env_path = difficulty_levels_[env_id_] + std::string("/") +
+                     env_folder_;
+    logger_.info(
+      "Only one environment specified: Load configuration from " +
+      level_env_path);
+  } else {
+    if (num_envs_ % num_levels != 0 || num_envs_ > 100 * num_levels) {
+      logger_.warn(
+        "Either overall number of environments is not fully divisible by "
+        "the number of difficulty levels, or too many environments specified! "
+        "Some environments might be taken multiple times...");
+    }
+    level_env_path = difficulty_levels_[(env_id_ / (num_envs_ / num_levels)) % num_levels] +
+                     std::string("/") + std::string("environment_") +
+                     std::to_string((env_id_ % (num_envs_ / num_levels)) % 100);
+  }
+
   obstacle_cfg_path_ = getenv("FLIGHTMARE_PATH") +
                        std::string("/flightpy/configs/vision/") +
-                       difficulty_level_ + std::string("/") + env_folder_;
+                       level_env_path;
 
   // add dynamic objects
   std::string dynamic_object_yaml =
@@ -132,14 +153,16 @@ bool VisionEnv::getObs(Ref<Vector<>> obs) {
 
   // get N most closest obstacles as the observation
   Vector<visionenv::kNObstacles * visionenv::kNObstaclesState> obstacle_obs;
-  getObstacleState(obstacle_obs);
+  Vector<visionenv::kNFreePaths * visionenv::kNFreePathsState> free_paths_obs;
+  getObstacleState(obstacle_obs, free_paths_obs);
 
   // Observations
-  obs << goal_linear_vel_, ori, quad_state_.v, obstacle_obs;
+  obs << goal_linear_vel_, ori, quad_state_.v, obstacle_obs, free_paths_obs;
   return true;
 }
 
-bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
+bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state,
+                                 Ref<Vector<>> free_paths) {
   if (dynamic_objects_.size() <= 0 || static_objects_.size() <= 0) {
     logger_.error("No dynamic or static obstacles.");
     return false;
@@ -153,22 +176,31 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
 
   // compute relative distance to dynamic obstacles
   std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>> relative_pos;
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>> relative_vel;
   for (int i = 0; i < (int)dynamic_objects_.size(); i++) {
     // compute relative position vector
     Vector<3> delta_pos = dynamic_objects_[i]->getPos() - quad_state_.p;
     relative_pos.push_back(delta_pos);
 
+    // compute first order approximation of obstacle velocity
+    relative_vel.push_back(quad_state_.R() * // TODO: Check if velocity transformed correctly into body coordinates
+                           (dynamic_objects_[i]->getPos() - dynamic_objects_old_pos_[i]) /
+                           sim_dt_);
+    dynamic_objects_old_pos_[i] = dynamic_objects_[i]->getPos();
+
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
-    // limit observation range
-    if (obstacle_dist > max_detection_range_) {
-      obstacle_dist = max_detection_range_;
-    }
-    relative_pos_norm_.push_back(obstacle_dist);
 
-    // store the obstacle radius
+    // compute the obstacle radius
     Scalar obs_radius = dynamic_objects_[i]->getScale()[0] / 2;
-    obstacle_radius_.push_back(obs_radius);
+
+    if (obstacle_dist - obs_radius <= max_detection_range_) {
+      relative_pos_norm_.push_back(obstacle_dist);
+      obstacle_radius_.push_back(obs_radius);
+    } else {
+      relative_pos_norm_.push_back(999.0);
+      obstacle_radius_.push_back(0.0);
+    }
 
     //
     if (obstacle_dist < obs_radius) {
@@ -182,17 +214,22 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
     Vector<3> delta_pos = static_objects_[i]->getPos() - quad_state_.p;
     relative_pos.push_back(delta_pos);
 
+    Vector<3> zero_vel = {0.0, 0.0, 0.0};
+    relative_vel.push_back(zero_vel);
 
     // compute relative distance
     Scalar obstacle_dist = delta_pos.norm();
-    if (obstacle_dist > max_detection_range_) {
-      obstacle_dist = max_detection_range_;
-    }
-    relative_pos_norm_.push_back(obstacle_dist);
 
-    // store the obstacle radius
+    // compute the obstacle radius
     Scalar obs_radius = static_objects_[i]->getScale()[0] / 2;
-    obstacle_radius_.push_back(obs_radius);
+
+    if (obstacle_dist - obs_radius <= max_detection_range_) {
+      relative_pos_norm_.push_back(obstacle_dist);
+      obstacle_radius_.push_back(obs_radius);
+    } else {
+      relative_pos_norm_.push_back(999.0);
+      obstacle_radius_.push_back(0.0);
+    }
 
     if (obstacle_dist < obs_radius) {
       is_collision_ = true;
@@ -201,37 +238,130 @@ bool VisionEnv::getObstacleState(Ref<Vector<>> obs_state) {
 
   // std::cout << relative_pos_norm_ << std::endl;
   size_t idx = 0;
-  for (size_t sort_idx : sort_indexes(relative_pos_norm_)) {
+  std::vector<Scalar> rel_pos_norm_surface = relative_pos_norm_;
+  std::transform(relative_pos_norm_.begin(), relative_pos_norm_.end(), obstacle_radius_.begin(), rel_pos_norm_surface.begin(), std::minus<Scalar>());
+  std::vector<size_t> indices_sorted = sort_indexes(rel_pos_norm_surface);
+  for (size_t sort_idx : indices_sorted) {
     if (idx >= visionenv::kNObstacles) break;
 
     if (idx < relative_pos.size()) {
       // if enough obstacles in the environment
-      if (relative_pos_norm_[sort_idx] <= max_detection_range_) {
+      if (rel_pos_norm_surface[sort_idx] <= max_detection_range_) {
         // if obstacles are within detection range
+        Vector<3> zero_vel = {0.0, 0.0, 0.0};
+        // assert correct velocity computation for static and dynamic obstacles
+        if (relative_vel[sort_idx] != zero_vel) {
+          assert(!(dynamic_objects_[sort_idx % dynamic_objects_.size()]->isStatic()));
+        } else {
+          assert(static_objects_[sort_idx % dynamic_objects_.size()]->isStatic());
+        }
         obs_state.segment<visionenv::kNObstaclesState>(
           idx * visionenv::kNObstaclesState)
           << relative_pos[sort_idx],
+          relative_vel[sort_idx],
           obstacle_radius_[sort_idx];
       } else {
         // if obstacles are beyong detection range
         obs_state.segment<visionenv::kNObstaclesState>(
-          idx * visionenv::kNObstaclesState) =
-          Vector<4>(max_detection_range_, max_detection_range_,
-                    max_detection_range_, obstacle_radius_[sort_idx]);
+          idx * visionenv::kNObstaclesState)
+          << max_detection_range_, max_detection_range_, max_detection_range_,
+          0.0, 0.0, 0.0,
+          0.0;
       }
 
     } else {
       // if not enough obstacles in the environment
       obs_state.segment<visionenv::kNObstaclesState>(
-        idx * visionenv::kNObstaclesState) =
-        Vector<visionenv::kNObstaclesState>(max_detection_range_,
-                                            max_detection_range_,
-                                            max_detection_range_, 0.0);
+        idx * visionenv::kNObstaclesState)
+        << max_detection_range_, max_detection_range_, max_detection_range_,
+        0.0, 0.0, 0.0,
+        0.0;
     }
     idx += 1;
   }
 
+  getPolarVoxel(relative_pos, relative_pos_norm_, obstacle_radius_, indices_sorted, free_paths);
+
   return true;
+}
+
+bool VisionEnv::getPolarVoxel(
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
+  std::vector<Scalar> rel_pos_norm_list,
+  std::vector<Scalar> obs_radius_list,
+  std::vector<size_t> indices_sorted,
+  Ref<Vector<>> polar_voxel) {
+    std::vector<Vector<3>> all_free_paths;
+    std::vector<Scalar> free_path_lengths;
+    // for kNCuts=8: phi, theta angles go from (approx.) -pi/4 to pi/4
+    for (int f = -visionenv::kNCuts / 2; f < visionenv::kNCuts / 2; ++f) {
+      for (int t = -visionenv::kNCuts / 2; t < visionenv::kNCuts / 2; ++t) {
+        Scalar f_cell = (f + 0.5) * (M_PI / visionenv::kNCuts) / 2;
+        Scalar t_cell = (t + 0.5) * (M_PI / visionenv::kNCuts) / 2;
+        all_free_paths.push_back(getCartesianFromAng(f_cell, t_cell));
+        free_path_lengths.push_back(getDistanceToClosestObstacle(rel_pos_list_B, rel_pos_norm_list, obs_radius_list, indices_sorted, f_cell, t_cell));
+      }
+    }
+
+    size_t amount = 0;
+    std::vector<size_t> free_path_indices_sorted = sort_indexes(free_path_lengths);
+    // sort descending by the free path lengths
+    for (size_t sorted_idx = free_path_indices_sorted.size() - 1; sorted_idx >= 0; sorted_idx--) {
+      if (amount >= visionenv::kNFreePaths) {
+        break;
+      }
+
+      polar_voxel.segment<visionenv::kNFreePathsState>(
+        amount * visionenv::kNFreePathsState)
+        << all_free_paths[sorted_idx],
+           free_path_lengths[sorted_idx];
+
+      amount++;
+    }
+
+    return true;
+}
+
+Scalar VisionEnv::getDistanceToClosestObstacle(
+  std::vector<Vector<3>, Eigen::aligned_allocator<Vector<3>>>& rel_pos_list_B,
+  std::vector<Scalar> rel_pos_norm_list,
+  std::vector<Scalar> obs_radius_list,
+  std::vector<size_t> indices_sorted,
+  Scalar f_cell, Scalar t_cell) {
+    Matrix<3, 3> R = quad_state_.R();
+    R.transposeInPlace();
+    Vector<3> ray = getCartesianFromAng(f_cell, t_cell);
+    Scalar d_min = max_detection_range_;
+    for (size_t sort_idx : indices_sorted) {
+        Vector<3> rel_pos_W = R * rel_pos_list_B[sort_idx]; // in world coordinates!
+        if (rel_pos_norm_list[sort_idx] == 999.0) {
+          break; // obstacle too far -> will be mapped anyway to `max_detection_range_`
+        }
+        Scalar r = obs_radius_list[sort_idx];
+        Scalar t_ca = rel_pos_W.dot(ray);
+        if (t_ca < 0) {
+          continue; // collision behind the ray origin
+        }
+        Scalar ray_dist = std::sqrt(rel_pos_W.squaredNorm() - t_ca * t_ca);
+        if (ray_dist > r) {
+          continue; // no collision
+        }
+        Scalar t_hc = std::sqrt(r * r - ray_dist * ray_dist);
+        if (t_ca - t_hc < d_min) {
+          d_min = t_ca - t_hc;
+          break; // obstacles are sorted by distance -> no other obstacle expected to be closer
+        }
+    }
+    return d_min; // TODO: needs normalization?
+}
+
+Vector<3> VisionEnv::getCartesianFromAng(Scalar phi, Scalar theta) {
+  Vector<3> cartesian = {
+    std::sin(theta) * std::cos(phi),
+    std::sin(theta) * std::sin(phi),
+    std::cos(theta)
+  };
+  return cartesian;
 }
 
 bool VisionEnv::step(const Ref<Vector<>> act, Ref<Vector<>> obs,
@@ -299,7 +429,7 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
         ? relative_pos_norm_[sort_idx]
         : max_detection_range_;
 
-    const Scalar dist_margin = 0.5;
+    const Scalar dist_margin = 0.1;
     if (relative_pos_norm_[sort_idx] <=
         obstacle_radius_[sort_idx] + dist_margin) {
       // compute distance penalty
@@ -308,6 +438,9 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
 
     idx += 1;
   }
+
+  Scalar move_reward =
+    move_coeff_ * (quad_state_.p(QS::POSX) - quad_old_state_.p(QS::POSX));
 
   // - tracking a constant linear velocity
   Scalar lin_vel_reward =
@@ -318,38 +451,43 @@ bool VisionEnv::computeReward(Ref<Vector<>> reward) {
 
   //  change progress reward as survive reward
   const Scalar total_reward =
-    lin_vel_reward + collision_penalty + ang_vel_penalty + survive_rew_;
+    move_reward + lin_vel_reward + collision_penalty + ang_vel_penalty + survive_rew_;
 
   // return all reward components for debug purposes
   // only the total reward is used by the RL algorithm
-  reward << lin_vel_reward, collision_penalty, ang_vel_penalty, survive_rew_,
+  reward << move_reward, lin_vel_reward, collision_penalty, ang_vel_penalty, survive_rew_,
     total_reward;
   return true;
 }
 
 bool VisionEnv::isTerminalState(Scalar &reward) {
-  // if (is_collision_) {
-  //   reward = -1.0;
-  //   return true;
-  // }
+  if (is_collision_) {
+    reward = -10.0;
+    return true;
+  }
 
   // simulation time out
   if (cmd_.t >= max_t_ - sim_dt_) {
-    reward = 0.0;
+    reward = -10.0;
     return true;
   }
 
   // world boundling box check
   // - x, y, and z
   const Scalar safty_threshold = 0.1;
-  bool x_valid = quad_state_.p(QS::POSX) >= world_box_[0] + safty_threshold &&
-                 quad_state_.p(QS::POSX) <= world_box_[1] - safty_threshold;
-  bool y_valid = quad_state_.p(QS::POSY) >= world_box_[2] + safty_threshold &&
-                 quad_state_.p(QS::POSY) <= world_box_[3] - safty_threshold;
+  bool x_valid = quad_state_.x(QS::POSX) >= world_box_[0] + safty_threshold &&
+                 quad_state_.x(QS::POSX) <= world_box_[1] - safty_threshold;
+  bool y_valid = quad_state_.x(QS::POSY) >= world_box_[2] + safty_threshold &&
+                 quad_state_.x(QS::POSY) <= world_box_[3] - safty_threshold;
   bool z_valid = quad_state_.x(QS::POSZ) >= world_box_[4] + safty_threshold &&
                  quad_state_.x(QS::POSZ) <= world_box_[5] - safty_threshold;
   if (!x_valid || !y_valid || !z_valid) {
-    reward = -1.0;
+    reward = -10.0;
+    return true;
+  }
+
+  if (quad_state_.x(QS::POSX) >= 60) {
+    reward = 50.0;
     return true;
   }
   return false;
@@ -421,7 +559,7 @@ bool VisionEnv::getImage(Ref<ImgVector<>> img, const bool rgb) {
 
 bool VisionEnv::loadParam(const YAML::Node &cfg) {
   if (cfg["environment"]) {
-    difficulty_level_ = cfg["environment"]["level"].as<std::string>();
+    difficulty_levels_ = cfg["environment"]["level"].as<std::vector<std::string>>();
     env_folder_ = cfg["environment"]["env_folder"].as<std::string>();
     world_box_ = cfg["environment"]["world_box"].as<std::vector<Scalar>>();
     std::vector<Scalar> goal_vel_vec =
@@ -434,6 +572,7 @@ bool VisionEnv::loadParam(const YAML::Node &cfg) {
   if (cfg["simulation"]) {
     sim_dt_ = cfg["simulation"]["sim_dt"].as<Scalar>();
     max_t_ = cfg["simulation"]["max_t"].as<Scalar>();
+    num_envs_ = cfg["simulation"]["num_envs"].as<int>();
   } else {
     logger_.error("Cannot load [quadrotor_env] parameters");
     return false;
@@ -441,6 +580,7 @@ bool VisionEnv::loadParam(const YAML::Node &cfg) {
 
   if (cfg["rewards"]) {
     // load reward coefficients for reinforcement learning
+    move_coeff_ = cfg["rewards"]["move_coeff"].as<Scalar>();
     vel_coeff_ = cfg["rewards"]["vel_coeff"].as<Scalar>();
     collision_coeff_ = cfg["rewards"]["collision_coeff"].as<Scalar>();
     angular_vel_coeff_ = cfg["rewards"]["angular_vel_coeff"].as<Scalar>();
@@ -522,6 +662,11 @@ bool VisionEnv::configDynamicObjects(const std::string &yaml_file) {
 
     dynamic_objects_.push_back(obj);
   }
+
+  for (int i = 0; i < (int)dynamic_objects_.size(); i++) {
+    dynamic_objects_old_pos_.push_back(dynamic_objects_[i]->getPos());
+  }
+
   num_dynamic_objects_ = dynamic_objects_.size();
   return true;
 }
