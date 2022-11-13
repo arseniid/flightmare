@@ -40,14 +40,26 @@ def clean_metadata(folder):
 
 def archive_dataset(folder):
     """
-    Stores dataset as one compressed .npz file
+    Stores dataset as one compressed .npz file, taking only the meaningful data out.
     Note: Saves up to 50% of disk memory (compared to uncompressed `np.savez()`)
     """
+    metadata = dict()
+    with open(f"{folder}/metadata.txt", "r+") as metadata_file:
+        metadata_lines = metadata_file.read().splitlines()
+
+        for line in metadata_lines:
+            line_list = line.split()
+            env = line_list[2].rstrip(":")
+            sequences = int(line_list[4])
+
+            metadata[env] = sequences
+
     kwargs = dict()
     for i in range(101):
-        for arr_key in [f"input_hard_{i}", f"output_hard_{i}"]:
+        env = f"hard_{i}"
+        for arr_key in [f"input_{env}", f"output_{env}"]:
             arr = np.load(f"{folder}/{arr_key}.npy")
-            kwargs[arr_key] = arr
+            kwargs[arr_key] = arr[:metadata[env], :]
 
     dataset_path = f"{folder}/dataset_hard.npz"
     np.savez_compressed(dataset_path, **kwargs)

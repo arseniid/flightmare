@@ -10,15 +10,14 @@ Each array can be referenced by its 'name': `(input|output)_hard_<environment_id
 
 ## Input/Output Dimensionalities ##
 
-By default, all data arrays have *first* dimensionality of 200 (since they are created with some pre-defined value before being filled up).
+The *first* dimensionality of all data arrays can be read from [metadata file](metadata.txt).
 
 *Second* dimensions are:
 - Each **input** arrays has *second* dimensionality of 111: 7-dim. state of 15 obstacles + 6-dim. drone state.
 - Each **output** arrays has *second* dimensionality of 72: 3-dim. drone control (i.e., linear velocities) * prediction horizon (T-1) of 24.
 
+For example, `dataset_hard.npz['input_hard_18']` will be of dimension (134, 111).
 
 ## Important Notes ##
 
 > **_NOTE 1:_** This is a 'small' dataset, meaning it stores only NMPC controls as output. For the full state output, please refer to 'full' dataset (tbd).
-
-> **_NOTE 2:_** Each array is initially created with `np.empty()` (see [code](https://github.com/arseniid/agile_flight/blob/learn-mpc/envtest/ros/run_competition.py#L41-L44)) -> each array is filled up to the size of 200 with *random* values instead zeros.
