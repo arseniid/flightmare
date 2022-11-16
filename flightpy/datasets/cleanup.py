@@ -85,11 +85,12 @@ if __name__ == "__main__":
         required=False,
         action="store_true"
     )
+    args = parser.parse_args()
 
     if os.getcwd().split("/")[-1] != "datasets":
-        print(f"Please run the script from the 'agile_flight/flightmare/flightpy/datasets/' folder!")
+        raise FileNotFoundError("Reading (meta)data depends on the current working directory. "
+                                "Please run the script from the 'agile_flight/flightmare/flightpy/datasets/' folder!")
 
-    args = parser.parse_args()
     if not args.no_metadata:
         clean_metadata(folder=args.folder)
     if not args.no_archive:
