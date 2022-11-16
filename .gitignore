@@ -26,5 +26,5 @@ saved
 *.npy
 *summary*.txt
 #	- Tensorboard logs
-runs/*
+runs/
 

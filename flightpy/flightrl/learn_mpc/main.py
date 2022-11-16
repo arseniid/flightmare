@@ -12,6 +12,13 @@ from mpc_nn import MPCFullLearned, MPCControlLearned, MPCControlLearnedBN, MPCCo
 from utils import Trainer
 
 
+def _write_to(f_handler=None, **kwargs):
+    if kwargs["filename"]:
+        f_handler(f"=== {kwargs['filename']} ===")
+    f_handler("Model and hyperparameters are:")
+    f_handler("\n".join([f"    - {k}: {v}" for k, v in kwargs.items()]))
+
+
 def get_dataloaders(dataset_folder="nmpc", batch_size=8):
     dataset = NMPCDataset(root_dir=dataset_folder)
     train_set, val_set = random_split(dataset, [round(0.8 * len(dataset)), round(0.2 * len(dataset))])  # 80% / 20% split
@@ -63,9 +70,12 @@ def random_hyperparam_search(epochs=5):
             print(f"Current best val loss: {best_val_loss}")
             print(f"Current val losses: {val_losses}")
             best_val_loss = min(val_losses)
-            print("Model and hyperparameters are:")
-            print(f"    - {model}")
-            print("\n".join([f"    - {k}: {v}"for k, v in hyperparams.items()]))
+            _write_to(
+                f_handler=print,
+                filename=None,
+                model_class=model,
+                **hyperparams,
+            )
 
 
 def train_model(epochs):
@@ -87,7 +97,15 @@ def train_model(epochs):
     )
     trainer.train(epochs=epochs)
 
-    trainer.save_model(directory="../../models", file_name="nmpc_control_model.pth")
+    model_filename = "nmpc_control_model.pth"
+    trainer.save_model(directory="../../models", file_name=model_filename)
+    with open("../../models/hyperdata.txt", "a+") as f:
+        _write_to(
+            f_handler=f.write,
+            filename=model_filename,
+            model_class=model,
+            **hyperparams,
+        )
 
 
 if __name__ == "__main__":

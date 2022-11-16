@@ -19,4 +19,4 @@ The script will train the model for a defined number of epochs, print intermedia
 Additionally, it will report Tensorboard logs to the ['runs/' folder](runs/).
 
 > **_NOTE:_** If the `--hparam-search` flag is given, no final training (as well as saving the model) will happen! Instead, the script will try to do simple
-random search of the best hyperparameters (for 5 epochs).
+random search of the best hyperparameters (for 30 different sets of hyperparameters, for 5 epochs each).
