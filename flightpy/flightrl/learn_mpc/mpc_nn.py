@@ -1,122 +1,79 @@
 from torch import nn
 
+ALLOWED_ACTIVATION_FUNCTIONS = [
+    nn.ReLU,
+    nn.ELU,
+    nn.LeakyReLU,
+    nn.Tanh,
+]
 
-class MPCControlLearnedBN(nn.Module):
-    def __init__(self):
+
+class BaseMPCLearned(nn.Module):
+    def __init__(self, batch_norm=None, activation=None) -> None:
         super().__init__()
         self.flatten = nn.Flatten()
-        self.linear_relu = nn.Sequential(
-            # in: 7-dim. state of 15 obstacles + 6-dim. drone state = 111
-            nn.Linear(15 * 7 + 6, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Linear(512, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Linear(1024, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Linear(256, 3 * 24),
-            # out: 3-dim. drone controls x horizon (T-1) of 24 = 72
-        )
+
+        self.batch_norm_layer = nn.BatchNorm1d if batch_norm else nn.Identity
+
+        assert activation in ALLOWED_ACTIVATION_FUNCTIONS
+        self.activation = activation
+
+        self.net = None
 
     def forward(self, x):
         x = self.flatten(x)
-        logits = self.linear_relu(x)
+        logits = self.net(x)
         return logits
 
+    def _block(self, in_size, out_size):
+        return nn.Sequential(
+            nn.Linear(in_size, out_size),
+            self.batch_norm_layer(out_size),
+            self.activation(),
+        )
 
-class MPCControlLearned(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu = nn.Sequential(
+    def _final_block(self, in_size, out_size):
+        return nn.Linear(in_size, out_size)
+
+
+class MPCLearnedControl(BaseMPCLearned):
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
+
+        self.net = nn.Sequential(
             # in: 7-dim. state of 15 obstacles + 6-dim. drone state = 111
-            nn.Linear(15 * 7 + 6, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 3 * 24),
+            self._block(in_size=15 * 7 + 6, out_size=512),
+            self._block(512, 1024),
+            self._block(1024, 512),
+            self._block(512, 256),
+            self._final_block(in_size=256, out_size=3 * 24),
             # out: 3-dim. drone controls x horizon (T-1) of 24 = 72
         )
 
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu(x)
-        return logits
 
+class MPCLearnedControlSmall(BaseMPCLearned):
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
 
-class MPCControlLearnedSmallBN(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu = nn.Sequential(
+        self.net = nn.Sequential(
             # in: 7-dim. state of 15 obstacles + 6-dim. drone state = 111
-            nn.Linear(15 * 7 + 6, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Linear(256, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Linear(256, 3 * 24),
+            self._block(in_size=15 * 7 + 6, out_size=256),
+            self._block(256, 512),
+            self._block(512, 256),
+            self._final_block(in_size=256, out_size=3 * 24),
             # out: 3-dim. drone controls x horizon (T-1) of 24 = 72
         )
 
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu(x)
-        return logits
 
+class MPCLearnedFullSmall(BaseMPCLearned):
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
 
-class MPCControllLearnedSmall(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu = nn.Sequential(
+        self.net = nn.Sequential(
             # in: 7-dim. state of 15 obstacles + 6-dim. drone state = 111
-            nn.Linear(15 * 7 + 6, 256),
-            nn.ReLU(),
-            nn.Linear(256, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 3 * 24),
-            # out: 3-dim. drone controls x horizon (T-1) of 24 = 72
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu(x)
-        return logits
-
-
-class MPCFullLearned(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu = nn.Sequential(
-            # in: 7-dim. state of 15 obstacles + 6-dim. drone state = 111
-            nn.Linear(15 * 7 + 6, 256),
-            nn.ReLU(),
-            nn.Linear(256, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 9 * 11),
+            self._block(in_size=15 * 7 + 6, out_size=256),
+            self._block(256, 512),
+            self._block(512, 256),
+            self._final_block(in_size=256, out_size=9 * 11),
             # out: full 9-dim. drone state x horizon (T-1) of 11 = 99
         )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu(x)
-        return logits

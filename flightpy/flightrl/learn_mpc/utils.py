@@ -50,6 +50,25 @@ class DataSaver:
 
 
 class Trainer:
+    """
+    Universal class to train PyTorch neural networks.
+
+    Some (important) attributes
+    ----------
+    model : instance of PyTorch nn.Module (or derived) class
+        model to train
+        [must be already initialized!]
+    opt : torch.optim.Optimizer (or derived class)
+        optimization algorithm
+        [will be initialized here - no need to pass initialized argument!]
+    loss_fn : instance of torch.nn._Loss (or derived) class
+        function to compute loss between prediction and labels
+        [must be already initialized!]
+    writer : instance of tensorboard.SummaryWriter class
+        Tensorboard logs writer
+        [must be already initialized!]
+    """
+
     def __init__(
         self,
         model,
@@ -68,16 +87,25 @@ class Trainer:
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        self.model = model()
+        self.model = model
         self.model.to(self.device)
 
-        self.loss_fn = loss_fn()
+        self.loss_fn = loss_fn
 
         try:
-            self.opt = optimizer(self.model.parameters(), lr=learning_rate, weight_decay=lr_decay, momentum=momentum)
+            self.opt = optimizer(
+                self.model.parameters(),
+                lr=learning_rate,
+                weight_decay=lr_decay,
+                momentum=momentum,
+            )
         except TypeError as e:
-            print(f"{e}: Adam optimizer doesn't use momentum! Initializing Adam without it.")
-            self.opt = optimizer(self.model.parameters(), lr=learning_rate, weight_decay=lr_decay)
+            print(
+                f"{e}: Adam optimizer doesn't use momentum! Initializing Adam without it."
+            )
+            self.opt = optimizer(
+                self.model.parameters(), lr=learning_rate, weight_decay=lr_decay
+            )
 
         self.verbose = verbose
         self.print_every = print_every
