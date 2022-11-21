@@ -1,5 +1,5 @@
 # NMPC Short Dataset #
-The dataset was created by running Nonlinear MPC on **all** `hard` environments, and contains 17092 input-output sequences.
+The dataset was created by running Nonlinear MPC on **all** `hard` environments, and contains 16945 input-output sequences.
 
 The whole dataset is compressed into one `.npz` file with the following structure:
 - 101 2-dim. numpy arrays for the NMPC input
