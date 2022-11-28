@@ -27,4 +27,6 @@ saved
 *summary*.txt
 #	- Tensorboard logs
 runs/
+#	- Trained models
+models/
 
