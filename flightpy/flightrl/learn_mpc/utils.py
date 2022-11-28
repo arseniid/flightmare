@@ -1,3 +1,4 @@
+import copy
 import os
 
 import numpy as np
@@ -83,6 +84,7 @@ class Trainer:
         verbose=True,
         print_every=100,
         logger=None,
+        patience=10,
         **kwargs,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -90,7 +92,8 @@ class Trainer:
         self.model = model
         self.model.to(self.device)
 
-        self.loss_fn = loss_fn
+        self.train_dataloader = train_dataloader
+        self.val_dataloader = val_dataloader
 
         try:
             self.opt = optimizer(
@@ -107,14 +110,16 @@ class Trainer:
                 self.model.parameters(), lr=learning_rate, weight_decay=lr_decay
             )
 
+        self.loss_fn = loss_fn
+
         self.verbose = verbose
         self.print_every = print_every
         self.writer = logger
 
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
-
+        self.patience = patience
         self.current_patience = 0
+        self.best_val_loss = 1e8
+        self.best_model = None
 
     def train(self, epochs):
         val_losses = []
@@ -138,7 +143,25 @@ class Trainer:
                     loss, current = loss.item(), batch * len(X)
                     print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
-            val_losses.append(self.val(epoch))
+            current_val_loss = self.val(epoch)
+            if np.isnan(current_val_loss):
+                print(f"Current loss is {current_val_loss} -> stop training.")
+                break
+            val_losses.append(current_val_loss)
+
+            # Early stopping:
+            if current_val_loss < self.best_val_loss:
+                self.best_val_loss = current_val_loss
+                self.best_model = copy.deepcopy(self.model)
+                self.current_patience = 0
+            else:
+                self.current_patience += 1
+                if self.current_patience >= self.patience:
+                    if self.verbose:
+                        print(f"Patience of {self.patience} exceeded: "
+                              f"No improvement over last {self.patience} epochs -> stop training.\n"
+                              f"Best validation loss is {self.best_val_loss}")
+                    break
 
         self.writer.flush()  # make sure that all pending events have been written to disk
         self.writer.close()
@@ -166,7 +189,16 @@ class Trainer:
         if not os.path.exists(directory):
             os.makedirs(directory)
         model_path = os.path.join(directory, file_name)
-        model = self.model.cpu()
-        torch.save(model.state_dict(), model_path)
+
+        # Make sure early stopping works
+        best_model = self.best_model.cpu()
+        last_model = self.model.cpu()
+        try:
+            assert str(best_model.state_dict()) != str(last_model.state_dict())
+        except AssertionError as e:
+            print(f"Assertion warning: {e}. Please verify that last validation loss is the best one, "
+                   "otherwise the early stopping didn't work.")
+
+        torch.save(best_model.state_dict(), model_path)
         print(f"The model is saved to {model_path} successfully!")
         return model_path
