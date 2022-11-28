@@ -153,11 +153,11 @@ def train_model(epochs):
     )
     val_losses = trainer.train(epochs=epochs)
 
-    model_filename = "nmpc_short_full_model_overfit_hard0_controls_best.pth"
+    model_filename = "nmpc_short_controls_model_overfit_hard0.pth"
     trainer.save_model(
         directory="../../models/overfit_controls/", file_name=model_filename
     )
-    with open("../../models/hyperdata.txt", "a+") as f:
+    with open("../../models/overfit_controls/hyperdata.txt", "a+") as f:
         _write_to(
             f_handler=f.write,
             filename=model_filename,
