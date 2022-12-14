@@ -21,3 +21,12 @@ _site
 
 saved
 
+# Learning the MPC module: 
+# 	- Datasets: All datasets should be stored as .npz files
+*.npy
+*summary*.txt
+#	- Tensorboard logs
+runs/
+#	- Trained models
+models/
+
