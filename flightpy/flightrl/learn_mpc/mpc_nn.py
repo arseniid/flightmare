@@ -78,13 +78,76 @@ class LearnedMPCShortFullSmall(BaseLearnedMPC):
         )
 
 
-class LearnedMPCShortControlSmall(BaseLearnedMPC):
+class LearnedMPCShortControlFirst(BaseLearnedMPC):
     """
     Naming:
         - LearnedMPC -> learning-based MPC
         - Short -> trained on the short horizon (i.e., of 12 steps)
-        - Control -> predicts only control part of the MPC output (i.e., velocities)
+        - ControlFirst -> predicts only control part of the MPC output (i.e., velocities), and only for the first timestep
+    """
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
+
+        self.net = nn.Sequential(
+            # in: 7-dim. relative state of 15 obstacles + 3-dim. goal direction (in drone body frame) = 108
+            self._block(in_size=15 * 7 + 3, out_size=192),
+            self._block(192, 96),
+            self._block(96, 24),
+            self._final_block(in_size=24, out_size=3),
+            # out: 3-dim. drone controls = 3
+        )
+
+
+class LearnedMPCShortControlFirstDeep(BaseLearnedMPC):
+    """
+    Naming:
+        - LearnedMPC -> learning-based MPC
+        - Short -> trained on the short horizon (i.e., of 12 steps)
+        - ControlFirst -> predicts only control part of the MPC output (i.e., velocities), and only for the first timestep
+        - Deep -> the deepest network between all architectures
+    """
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
+
+        self.net = nn.Sequential(
+            # in: 7-dim. relative state of 15 obstacles + 3-dim. goal direction (in drone body frame) = 108
+            self._block(in_size=15 * 7 + 3, out_size=192),
+            self._block(192, 128),
+            self._block(128, 64),
+            self._block(64, 32),
+            self._final_block(in_size=32, out_size=3),
+            # out: 3-dim. drone controls = 3
+        )
+
+
+class LearnedMPCShortControlFirstSmall(BaseLearnedMPC):
+    """
+    Naming:
+        - LearnedMPC -> learning-based MPC
+        - Short -> trained on the short horizon (i.e., of 12 steps)
+        - ControlFirst -> predicts only control part of the MPC output (i.e., velocities), and only for the first timestep
         - Small -> size of the network, i.e., 3 (!) linear layers only
+    """
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
+
+        self.net = nn.Sequential(
+            # in: 7-dim. relative state of 15 obstacles + 3-dim. goal direction (in drone body frame) = 108
+            self._block(in_size=15 * 7 + 3, out_size=192),
+            self._block(192, 48),
+            self._final_block(in_size=48, out_size=3),
+            # out: 3-dim. drone controls = 3
+        )
+
+
+class LearnedMPCShortControlFirstSmallWide(BaseLearnedMPC):
+    """
+    Naming:
+        - LearnedMPC -> learning-based MPC
+        - Short -> trained on the short horizon (i.e., of 12 steps)
+        - ControlFirst -> predicts only control part of the MPC output (i.e., velocities), and only for the first timestep
+        - Small -> size of the network, i.e., 3 (!) linear layers only
+        - Wide ['Old' previously] -> the widest layers between all architectures
     """
     def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
         super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
@@ -93,6 +156,29 @@ class LearnedMPCShortControlSmall(BaseLearnedMPC):
             # in: 7-dim. relative state of 15 obstacles + 3-dim. goal direction (in drone body frame) = 108
             self._block(in_size=15 * 7 + 3, out_size=256),
             self._block(256, 128),
-            self._final_block(in_size=128, out_size=11 * 3),
-            # out: horizon (T-1) of 11 x 3-dim. drone controls = 33
+            self._final_block(in_size=128, out_size=3),
+            # out: 3-dim. drone controls = 3
+        )
+
+
+class LearnedMPCShortControlFirstDeepObstaclesOnly(BaseLearnedMPC):
+    """
+    Naming:
+        - LearnedMPC -> learning-based MPC
+        - Short -> trained on the short horizon (i.e., of 12 steps)
+        - ControlFirst -> predicts only control part of the MPC output (i.e., velocities), and only for the first timestep
+        - Deep -> the deepest network between all architectures
+        - ObstaclesOnly -> only obstacles are used as input (especially, no direction to the goal)
+    """
+    def __init__(self, use_batch_normalization, activation_fn=nn.ReLU):
+        super().__init__(batch_norm=use_batch_normalization, activation=activation_fn)
+
+        self.net = nn.Sequential(
+            # in: 7-dim. relative state of 15 obstacles = 105
+            self._block(in_size=15 * 7, out_size=192),
+            self._block(192, 128),
+            self._block(128, 64),
+            self._block(64, 32),
+            self._final_block(in_size=32, out_size=3),
+            # out: 3-dim. drone controls = 3
         )

@@ -2,27 +2,18 @@ import argparse
 import os
 import random
 
-from torch.nn import (
-    ELU,
-    HuberLoss,
-    L1Loss,
-    LeakyReLU,
-    MSELoss,
-    ReLU,
-    SmoothL1Loss,
-    Tanh,
-)
+from mpc_dataset import NMPCDataset
+from mpc_nn import (ALLOWED_ACTIVATION_FUNCTIONS, LearnedMPCShortControlFirst,
+                    LearnedMPCShortControlFirstDeep,
+                    LearnedMPCShortControlFirstDeepObstaclesOnly,
+                    LearnedMPCShortControlFirstSmall,
+                    LearnedMPCShortControlFirstSmallWide, LearnedMPCShortFull,
+                    LearnedMPCShortFullSmall)
+from torch.nn import (ELU, HuberLoss, L1Loss, LeakyReLU, MSELoss, ReLU,
+                      SmoothL1Loss, Tanh)
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
-
-from mpc_dataset import NMPCDataset
-from mpc_nn import (
-    ALLOWED_ACTIVATION_FUNCTIONS,
-    LearnedMPCShortControlSmall,
-    LearnedMPCShortFull,
-    LearnedMPCShortFullSmall,
-)
 from utils import Trainer
 
 
@@ -41,12 +32,17 @@ def _get_controls_first_only(input, horizon=12, variables=9):
     return input.reshape((horizon - 1, variables))[0, 3:6].flatten()
 
 
-def get_dataloaders(dataset_folder="nmpc_short", batch_size=8, control_only=False):
+def _get_obstacles_only(input):
+    return input[:105]
+
+
+def get_dataloaders(dataset_folder="nmpc_short", batch_size=8, obstacles_only=False, control_only=False, split=(0.8, 0.2)):
+    transform = _get_obstacles_only if obstacles_only else None
     target_transform = _get_controls_first_only if control_only else None
 
-    dataset = NMPCDataset(root_dir=dataset_folder, target_transform=target_transform)
+    dataset = NMPCDataset(root_dir=dataset_folder, transform=transform, target_transform=target_transform)
     train_set, val_set = random_split(
-        dataset, [round(0.8 * len(dataset)), round(0.2 * len(dataset))]
+        dataset, [round(split[0] * len(dataset)), round(split[1] * len(dataset))]
     )  # 80% / 20% split
 
     # num_workers should be 1, otherwise there are various zipFile errors due to concurrent read of the same .npz archive
@@ -59,17 +55,21 @@ def get_dataloaders(dataset_folder="nmpc_short", batch_size=8, control_only=Fals
     return train_loader, val_loader
 
 
-def random_hyperparam_search(epochs=20):
+def random_hyperparam_search(epochs=10):
     models = [
         LearnedMPCShortFull,
         LearnedMPCShortFullSmall,
-        LearnedMPCShortControlSmall,
+        LearnedMPCShortControlFirstSmallWide,
+        LearnedMPCShortControlFirstSmall,
+        LearnedMPCShortControlFirst,
+        LearnedMPCShortControlFirstDeep,
+        LearnedMPCShortControlFirstDeepObstaclesOnly,
     ]
     activations = ALLOWED_ACTIVATION_FUNCTIONS
     batch_sizes = [4, 8, 16, 32, 64, 128]
     lr_rates = [1e-5, 1e-2]
     lr_decays = [0, 1e-1]
-    momenta = [0, 0.9]
+    momenta = [0, 0.95]
     optimizers = [Adam, SGD]
     loss_fns = [MSELoss, L1Loss, SmoothL1Loss, HuberLoss]
 
@@ -83,11 +83,12 @@ def random_hyperparam_search(epochs=20):
             batch_sizes = [16, 32, 64, 128]
         activation = random.choice(activations)
 
-        model = random.choice(models)(
+        model = random.choice(models[2:])(  # TODO: Manage models choice here!
             use_batch_normalization=use_batch_norm, activation_fn=activation
         )  # initialized!
 
-        control = isinstance(model, LearnedMPCShortControlSmall)
+        obstacles = len(list(filter(lambda x: isinstance(model, x), models[-1:]))) != 0
+        control = len(list(filter(lambda x: isinstance(model, x), models[2:]))) != 0
 
         hyperparams = {
             "batch_size": random.choice(batch_sizes),
@@ -99,7 +100,9 @@ def random_hyperparam_search(epochs=20):
             "logger": SummaryWriter(log_dir=f"runs/hparam_search/exp{i}"),
         }
         train_loader, val_loader = get_dataloaders(
-            batch_size=hyperparams["batch_size"], control_only=control
+            batch_size=hyperparams["batch_size"],
+            obstacles_only=obstacles,
+            control_only=control,
         )
 
         trainer = Trainer(
@@ -112,7 +115,7 @@ def random_hyperparam_search(epochs=20):
         val_losses = trainer.train(epochs=epochs)
 
         val_losses_better = [x <= best_val_loss for x in val_losses]
-        val_loss_okay = [x <= 1.0 for x in val_losses]
+        val_loss_okay = [x <= 1.3 for x in val_losses]
         if any(val_losses_better + val_loss_okay):
             print(f"Current best val loss: {best_val_loss}")
             print(f"Current val losses: {val_losses}")
