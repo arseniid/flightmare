@@ -41,8 +41,8 @@ simulation:
   seed: 1
   sim_dt: 0.02
   max_t: 60.0
-  num_envs: 100 # overall; should be divisible by the number of difficulty levels given (in the best case)
-  num_threads: 12
+  num_envs: 1 # overall; should be divisible by the number of difficulty levels given (in the best case)
+  num_threads: 8
 
 quadrotor_dynamics:
   mass: 0.752
