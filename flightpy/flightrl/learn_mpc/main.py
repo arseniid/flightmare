@@ -130,37 +130,39 @@ def random_hyperparam_search(epochs=10):
 
 
 def train_model(epochs):
-    model = LearnedMPCShortControlSmall(
+    model = LearnedMPCShortControlFirstDeepObstaclesOnly(
         use_batch_normalization=False, activation_fn=Tanh
     )
 
     hyperparams = {
-        "batch_size": 64,
-        "learning_rate": 0.0097,
-        "lr_decay": 0.0174,
-        "momentum": 0.75,
+        "batch_size": 16,
+        "learning_rate": 0.0035,
+        "lr_decay": 0.047,
+        "momentum": 0.14,
         "optimizer": SGD,
         "loss_fn": SmoothL1Loss(),
-        "logger": SummaryWriter("runs/overfit_controls/"),
+        "logger": SummaryWriter("runs/obstacles_only/"),
     }
     train_loader, val_loader = get_dataloaders(
-        batch_size=hyperparams["batch_size"], control_only=True
+        batch_size=hyperparams["batch_size"],
+        obstacles_only=True,
+        control_only=True,
     )
 
     trainer = Trainer(
         model,
         train_dataloader=train_loader,
         val_dataloader=val_loader,
-        patience=100,
+        patience=30,
         **hyperparams,
     )
     val_losses = trainer.train(epochs=epochs)
 
-    model_filename = "nmpc_short_controls_model_overfit_hard0.pth"
+    model_filename = "nmpc_short_controls_first_model_deep_obstacles_only.pth"
     trainer.save_model(
-        directory="../../models/overfit_controls/", file_name=model_filename
+        directory="../../models/obstacles_only/", file_name=model_filename
     )
-    with open("../../models/overfit_controls/hyperdata.txt", "a+") as f:
+    with open("../../models/obstacles_only/hyperdata.txt", "a+") as f:
         _write_to(
             f_handler=f.write,
             filename=model_filename,
@@ -190,4 +192,4 @@ if __name__ == "__main__":
     if args.hparam_search:
         print(random_hyperparam_search())
     else:
-        train_model(epochs=300)
+        train_model(epochs=100)
